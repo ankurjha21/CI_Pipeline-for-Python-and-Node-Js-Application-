@@ -1,0 +1,58 @@
+#!groovy
+pipeline {
+
+	agent any
+
+	environment {
+		PACKAGE_PATH='Project'
+		PACKAGE_VERSION_PREFIX='1.0'
+	}
+		stages {		
+			stage('Run static analysis using Pylint') {
+				steps {
+					sh '''#!/bin/bash
+					pylint -j 0 -r n -f parseable (Python code Folder name)  | tee output/pylint.out''' 
+					warnings canComputeNew: false, canResolveRelativePaths: false, categoriesPattern: '', consoleParsers: [[parserName: 'PyLint']], defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', unHealthy: ''
+				}
+			}
+			stage('Run static analysis using Jslint') {
+				steps {
+				     sh '''#!/bin/bash
+				     jshint (Node Js code Folder name) --reporter=checkstyle | tee jshint.xml '''
+				      warnings canComputeNew: false, canResolveRelativePaths: false, categoriesPattern: '', defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'JSLint', pattern: 'jshint.xml']], unHealthy: ''
+				}
+			}
+	        stage('Run static analysis using Pytest') {
+			   steps {
+				      sh '''#!/bin/bash
+				      sudo python3 -m pytest newtest.py  | tee output/pytest.json'''
+                }
+			}
+		  stage('Run Vulnerability analysis using OWASP ZAP') {
+			   steps {
+				      sh '''#!/bin/bash
+				     //  sudo docker run -t owasp/zap2docker-weekly zap-baseline.py -t http://application.URL  -z --auth_usernamefield username_application --auth_passwordfield application_password  | tee zap.json'''
+                }
+			}
+		  stage('html report'){
+		      steps {
+		             archive (includes: 'output/*.out')
+                     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, includes: '**/*.html', keepAll: false, reportDir: '', reportFiles: 'py.html', reportName: 'Pylint Report', reportTitles: 'Pylint Test Report'])
+                     emailext attachLog: true, body: '''Hi, Please find the Attached Pylint Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS: Check console output at $BUILD_URL to view the results.''', compressLog: true, replyTo:'ankur.jha@atmecs.com', subject: ' Pylint Build Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS!', to: 'ankurjha19@gmail.com'
+                     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, includes: '**/*.json', keepAll: false, reportDir: '', reportFiles: 'jshint.json', reportName: 'Jslint Report', reportTitles: 'Jslint Test Report'])
+                     emailext attachLog: true, body: '''Hi, Please find the Attached Jslint Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS: Check console output at $BUILD_URL to view the results.''', compressLog: true, replyTo:'ankur.jha@atmecs.com', subject: ' Jslint Build Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS!', to: 'ankurjha19@gmail.com'
+                     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, includes: '**/*.html ,**/*.json', keepAll: false, reportDir: '', reportFiles: 'pytest.json', reportName: 'Pytest Report', reportTitles: 'Pytest Test Report'])
+                     emailext attachLog: true, body: '''Hi, Please find the Attached Pytest Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS: Check console output at $BUILD_URL to view the results.''', compressLog: true, replyTo:'ankur.jha@atmecs.com', subject: ' Pytest Build Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS!', to: 'ankurjha19@gmail.com'
+                     publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, includes: '**/*.html ,**/*.json', keepAll: false, reportDir: '', reportFiles: 'zap.json', reportName: 'ZAP Report', reportTitles: 'OWASP ZAP Test Report'])
+                     emailext attachLog: true, body: '''Hi, Please find the Attached OWASP Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS: Check console output at $BUILD_URL to view the results.''', compressLog: true, replyTo:'ankur.jha@atmecs.com', subject: ' OWASP ZAP Build Report $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS!', to: 'ankurjha19@gmail.com'
+                     
+                }      
+			}
+		}
+	options {
+		// Store max 4 build results at any given time
+		buildDiscarder(logRotator(numToKeepStr:'4'))
+		// To make sure that this build doesn't hang forever, we time it out after an hour
+		timeout(time: 60, unit: 'MINUTES')
+    }
+}
